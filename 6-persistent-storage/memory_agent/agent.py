@@ -1,6 +1,28 @@
 from google.adk.agents import Agent
 from google.adk.tools.tool_context import ToolContext
 
+# Define the model as a constant for easier configuration
+GEMINI_MODEL = "gemini-2.0-flash"
+
+
+def _validate_reminder_index(index: int, reminders: list) -> dict | None:
+    """
+    Helper function to validate the index for a reminder.
+
+    Args:
+        index: The 1-based index from the user.
+        reminders: The current list of reminders.
+
+    Returns:
+        An error dictionary if validation fails, otherwise None.
+    """
+    if not reminders or index < 1 or index > len(reminders):
+        return {
+            "status": "error",
+            "message": f"Could not find reminder at position {index}. Currently there are {len(reminders)} reminders.",
+        }
+    return None
+
 
 def add_reminder(reminder: str, tool_context: ToolContext) -> dict:
     """Add a new reminder to the user's reminder list.
@@ -65,14 +87,9 @@ def update_reminder(index: int, updated_text: str, tool_context: ToolContext) ->
     # Get current reminders from state
     reminders = tool_context.state.get("reminders", [])
 
-    # Check if the index is valid
-    if not reminders or index < 1 or index > len(reminders):
-        return {
-            "action": "update_reminder",
-            "status": "error",
-            "message": f"Could not find reminder at position {index}. Currently there are {len(reminders)} reminders.",
-        }
-
+    # Validate the index using the helper function
+    if error := _validate_reminder_index(index, reminders):
+        return {"action": "update_reminder", **error}
     # Update the reminder (adjusting for 0-based indices)
     old_reminder = reminders[index - 1]
     reminders[index - 1] = updated_text
@@ -104,14 +121,9 @@ def delete_reminder(index: int, tool_context: ToolContext) -> dict:
     # Get current reminders from state
     reminders = tool_context.state.get("reminders", [])
 
-    # Check if the index is valid
-    if not reminders or index < 1 or index > len(reminders):
-        return {
-            "action": "delete_reminder",
-            "status": "error",
-            "message": f"Could not find reminder at position {index}. Currently there are {len(reminders)} reminders.",
-        }
-
+    # Validate the index using the helper function
+    if error := _validate_reminder_index(index, reminders):
+        return {"action": "delete_reminder", **error}
     # Remove the reminder (adjusting for 0-based indices)
     deleted_reminder = reminders.pop(index - 1)
 
@@ -155,7 +167,7 @@ def update_user_name(name: str, tool_context: ToolContext) -> dict:
 # Create a simple persistent agent
 memory_agent = Agent(
     name="memory_agent",
-    model="gemini-2.0-flash",
+    model=GEMINI_MODEL,
     description="A smart reminder agent with persistent memory",
     instruction="""
     You are a friendly reminder assistant that remembers users across conversations.
@@ -228,3 +240,5 @@ memory_agent = Agent(
         update_user_name,
     ],
 )
+
+root_agent = memory_agent
