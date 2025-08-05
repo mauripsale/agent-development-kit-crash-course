@@ -1,3 +1,5 @@
+from google.adk.code_executors.code_execution_utils import CodeExecutionResult
+from google.genai.types import ExecutableCode, LiveClientToolResponse as ToolResponse
 from google.genai import types
 
 
@@ -28,12 +30,12 @@ class Colors:
     BG_WHITE = "\033[47m"
 
 
-def display_state(
+async def display_state(
     session_service, app_name, user_id, session_id, label="Current State"
 ):
     """Display the current session state in a formatted way."""
     try:
-        session = session_service.get_session(
+        session = await session_service.get_session(
             app_name=app_name, user_id=user_id, session_id=session_id
         )
 
@@ -64,25 +66,16 @@ async def process_agent_response(event):
     print(f"Event ID: {event.id}, Author: {event.author}")
 
     # Check for specific parts first
-    has_specific_part = False
     if event.content and event.content.parts:
         for part in event.content.parts:
-            if hasattr(part, "executable_code") and part.executable_code:
-                # Access the actual code string via .code
+            if isinstance(part, ExecutableCode):
                 print(
-                    f"  Debug: Agent generated code:\n```python\n{part.executable_code.code}\n```"
-                )
-                has_specific_part = True
-            elif hasattr(part, "code_execution_result") and part.code_execution_result:
-                # Access outcome and output correctly
+                    f"  Debug: Agent generated code:\n```python\n{part.code}\n```")
+            elif isinstance(part, CodeExecutionResult):
                 print(
-                    f"  Debug: Code Execution Result: {part.code_execution_result.outcome} - Output:\n{part.code_execution_result.output}"
-                )
-                has_specific_part = True
-            elif hasattr(part, "tool_response") and part.tool_response:
-                # Print tool response information
-                print(f"  Tool Response: {part.tool_response.output}")
-                has_specific_part = True
+                    f"  Debug: Code Execution Result: {part.outcome} - Output:\n{part.output}")
+            elif isinstance(part, ToolResponse):
+                print(f"  Tool Response: {part.output}")
             # Also print any text parts found in any event for debugging
             elif hasattr(part, "text") and part.text and not part.text.isspace():
                 print(f"  Text: '{part.text.strip()}'")
@@ -113,6 +106,7 @@ async def process_agent_response(event):
     return final_response
 
 
+
 async def call_agent_async(runner, user_id, session_id, query):
     """Call the agent asynchronously with the user's query."""
     content = types.Content(role="user", parts=[types.Part(text=query)])
@@ -122,7 +116,7 @@ async def call_agent_async(runner, user_id, session_id, query):
     final_response_text = None
 
     # Display state before processing
-    display_state(
+    await display_state(
         runner.session_service,
         runner.app_name,
         user_id,
@@ -142,7 +136,7 @@ async def call_agent_async(runner, user_id, session_id, query):
         print(f"Error during agent call: {e}")
 
     # Display state after processing the message
-    display_state(
+    await display_state(
         runner.session_service,
         runner.app_name,
         user_id,
